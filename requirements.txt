@@ -1,0 +1,10 @@
+flask
+flask-login
+flask-sqlalchemy
+mysql-connector-python
+pymysql
+pandas
+numpy
+scikit-learn
+matplotlib
+werkzeug

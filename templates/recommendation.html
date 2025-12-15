@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <h3 class="text-2xl font-bold text-gray-900 mb-2">Kesimpulan & Rekomendasi Strategi</h3>
+        <p class="text-gray-600">Berdasarkan hasil clustering, berikut adalah interpretasi profil pelanggan dan strategi
+            pemasaran yang disarankan.</p>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {% for rec in recommendations %}
+        <div class="rounded-lg shadow-lg overflow-hidden border {{ rec.bg_class }}">
+            <div class="px-6 py-4">
+                <div class="font-bold text-xl mb-2 flex items-center justify-between">
+                    <span>Cluster {{ rec.cluster }}</span>
+                    <span class="text-xs px-2 py-1 rounded bg-white bg-opacity-50 border border-current">{{ rec.name
+                        }}</span>
+                </div>
+                <div class="text-sm space-y-1 mb-4">
+                    <p><strong>Rata-rata Income:</strong> {{ rec.avg_income }} k$</p>
+                    <p><strong>Rata-rata Score:</strong> {{ rec.avg_score }}</p>
+                </div>
+                <hr class="border-current opacity-20 mb-4">
+                <p class="text-base">
+                    {{ rec.strategy }}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="mt-8 flex justify-center">
+        <a href="{{ url_for('dashboard') }}" class="text-indigo-600 hover:text-indigo-800 font-medium">
+            &larr; Kembali ke Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

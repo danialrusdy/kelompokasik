@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden md:max-w-lg">
+    <div class="md:flex">
+        <div class="w-full p-4">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Proses Clustering K-Means</h2>
+            <p class="text-gray-600 mb-6">
+                Tentukan jumlah cluster yang diinginkan untuk segmentasi pelanggan.
+                Metode elbow biasanya menyarankan antara 3-6 cluster untuk dataset ini.
+            </p>
+            <form action="{{ url_for('process_kmeans') }}" method="POST" class="space-y-4">
+                <div>
+                    <label for="k_value" class="block text-sm font-medium text-gray-700">Jumlah Cluster (K)</label>
+                    <input type="number" name="k_value" id="k_value" min="2" max="10" value="5"
+                        class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <button type="submit"
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Jalankan Clustering
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

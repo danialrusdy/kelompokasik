@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <div class="bg-white shadow sm:rounded-lg mb-6">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                Data Preprocessing
+            </h3>
+            <div class="mt-2 max-w-xl text-sm text-gray-500">
+                <p>
+                    Data yang telah diupload perlu dinormalisasi agar memiliki skala yang sama.
+                    Kita akan menggunakan <strong>StandardScaler</strong> untuk atribut <em>Annual Income</em> dan
+                    <em>Spending Score</em>.
+                </p>
+            </div>
+            <div class="mt-5">
+                <form action="{{ url_for('preprocessing') }}" method="POST">
+                    <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Lakukan Normalisasi Data
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex flex-col">
+        <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+            <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
+                <div class="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
+                    <h4
+                        class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Sample Data Mentah (10 Baris Pertama)
+                    </h4>
+                    <!-- We will inject the table here via Pandas to_html but we need to style it via CSS or loop manually. 
+                         The app.py passes `tables` which is raw HTML. We can render it safely. -->
+                    <div class="p-4">
+                        {% for table in tables %}
+                        {{ table|safe }}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

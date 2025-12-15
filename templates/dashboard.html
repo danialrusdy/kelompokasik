@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white shadow overflow-hidden sm:rounded-lg">
+    <div class="px-4 py-5 sm:px-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">
+            Dashboard Sistem Pendukung Keputusan
+        </h3>
+        <p class="mt-1 max-w-2xl text-sm text-gray-500">
+            Selamat datang di Sistem Segmentasi Pelanggan Mall.
+        </p>
+    </div>
+    <div class="border-t border-gray-200 px-4 py-5 sm:p-0">
+        <dl class="sm:divide-y sm:divide-gray-200">
+            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                <dt class="text-sm font-medium text-gray-500">
+                    Metode
+                </dt>
+                <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                    K-Means Clustering
+                </dd>
+            </div>
+            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                <dt class="text-sm font-medium text-gray-500">
+                    Deskripsi
+                </dt>
+                <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                    Sistem ini membantu manajemen mall untuk mengelompokkan pelanggan berdasarkan pendapatan tahunan dan
+                    skor pengeluaran. Dengan segmentasi ini, strategi pemasaran dapat lebih terarah dan efektif.
+                </dd>
+            </div>
+            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                <dt class="text-sm font-medium text-gray-500">
+                    Cara Penggunaan
+                </dt>
+                <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>Upload Data:</strong> Unggah file CSV dataset pelanggan.</li>
+                        <li><strong>Preprocessing:</strong> Sistem akan memvalidasi dan menormalisasi data.</li>
+                        <li><strong>Proses K-Means:</strong> Tentukan jumlah cluster (K) dan jalankan algoritma.</li>
+                        <li><strong>Hasil:</strong> Lihat tabel hasil clustering dan visualisasi grafiknya.</li>
+                        <li><strong>Rekomendasi:</strong> Dapatkan saran strategi untuk setiap segmen.</li>
+                    </ul>
+                </dd>
+            </div>
+        </dl>
+    </div>
+    <div class="bg-gray-50 px-4 py-4 sm:px-6 flex justify-end">
+        <a href="{{ url_for('upload') }}"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            Mulai Analisis
+        </a>
+    </div>
+</div>
+{% endblock %}
