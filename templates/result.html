@@ -39,10 +39,10 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Cluster {{ cluster }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ data['Count'] }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "%.2f"|format(data['Avg
-                            Income']) }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "%.2f"|format(data['Avg
-                            Score']) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{
+                            "%.2f"|format(data['AvgIncome']) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "%.2f"|format(data['AvgScore'])
+                            }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -235,7 +235,7 @@ def results():
             'CustomerID': 'count',
             'AnnualIncome': 'mean',
             'SpendingScore': 'mean'
-        }).rename(columns={'CustomerID': 'Count', 'AnnualIncome': 'Avg Income', 'SpendingScore': 'Avg Score'})
+        }).rename(columns={'CustomerID': 'Count', 'AnnualIncome': 'AvgIncome', 'SpendingScore': 'AvgScore'})
         
         return render_template(
             'result.html', 
