@@ -7,11 +7,13 @@ import pandas as pd
 import numpy as np
 import os
 import matplotlib
-matplotlib.use('Agg') # Backend for non-GUI
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
-from sklearn.preprocessing import StandardScaler
+
+# === PERUBAHAN UTAMA ===
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
 from sqlalchemy import text
 
@@ -26,7 +28,7 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# User Model
+# ================= USER MODEL =================
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -38,24 +40,24 @@ class User(UserMixin, db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Routes
+# ================= ROUTES =================
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
+# ---------- LOGIN ----------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
+
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
+        user = User.query.filter_by(username=request.form['username']).first()
+        if user and check_password_hash(user.password_hash, request.form['password']):
             login_user(user)
             return redirect(url_for('dashboard'))
-        else:
-            flash('Login Gagal. Periksa username dan password.', 'danger')
+        flash('Login gagal.', 'danger')
+
     return render_template('login.html')
 
 @app.route('/logout')
@@ -64,255 +66,185 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+# ---------- DASHBOARD ----------
 @app.route('/dashboard')
 @login_required
 def dashboard():
     return render_template('dashboard.html')
 
+# ---------- UPLOAD DATA ----------
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
     if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('No file part', 'danger')
+        file = request.files.get('file')
+        if not file or not file.filename.endswith('.csv'):
+            flash('File harus CSV', 'danger')
             return redirect(request.url)
-        file = request.files['file']
-        if file.filename == '':
-            flash('No selected file', 'danger')
+
+        path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+        file.save(path)
+
+        df = pd.read_csv(path)
+
+        required = ['CustomerID', 'Gender', 'Age', 'Annual Income (k$)', 'Spending Score (1-100)']
+        if not all(col in df.columns for col in required):
+            flash('Format kolom tidak sesuai', 'danger')
             return redirect(request.url)
-        
-        if file and file.filename.endswith('.csv'):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            
-            try:
-                df = pd.read_csv(filepath)
-                required_columns = ['CustomerID', 'Gender', 'Age', 'Annual Income (k$)', 'Spending Score (1-100)']
-                if not all(col in df.columns for col in required_columns):
-                    flash(f'Format Error. Columns must be: {", ".join(required_columns)}', 'danger')
-                    return redirect(request.url)
 
-                db.session.execute(text('DELETE FROM clustering_results'))
-                db.session.execute(text('DELETE FROM preprocessing_data'))
-                db.session.execute(text('DELETE FROM customers'))
-                db.session.commit()
+        # Reset data
+        db.session.execute(text('DELETE FROM customers'))
+        db.session.execute(text('DELETE FROM preprocessing_data'))
+        db.session.execute(text('DELETE FROM clustering_results'))
+        db.session.commit()
 
-                df = df.rename(columns={
-                    'Annual Income (k$)': 'AnnualIncome', 
-                    'Spending Score (1-100)': 'SpendingScore'
-                })
-                
-                df[['CustomerID', 'Gender', 'Age', 'AnnualIncome', 'SpendingScore']].to_sql(
-                    'customers', con=db.engine, if_exists='append', index=False
-                )
-                
-                flash(f'Data successfully uploaded! {len(df)} rows imported.', 'success')
-                return redirect(url_for('preprocessing'))
-                
-            except Exception as e:
-                flash(f'Error processing file: {e}', 'danger')
-                print(e)
-        else:
-            flash('Allowed file types are CSV', 'danger')
+        df = df.rename(columns={
+            'Annual Income (k$)': 'AnnualIncome',
+            'Spending Score (1-100)': 'SpendingScore'
+        })
+
+        df.to_sql('customers', db.engine, if_exists='append', index=False)
+        flash('Dataset berhasil diupload', 'success')
+        return redirect(url_for('preprocessing'))
 
     return render_template('upload.html')
 
+# ---------- PREPROCESSING ----------
 @app.route('/preprocessing', methods=['GET', 'POST'])
 @login_required
 def preprocessing():
-    raw_data = pd.read_sql("SELECT * FROM customers LIMIT 10", db.engine)
-    
+    raw = pd.read_sql("SELECT * FROM customers LIMIT 10", db.engine)
+
     if request.method == 'POST':
-        try:
-            df = pd.read_sql("SELECT CustomerID, AnnualIncome, SpendingScore FROM customers", db.engine)
-            if df.empty:
-                flash('No data to process.', 'warning')
-                return redirect(url_for('upload'))
+        df = pd.read_sql(
+            "SELECT CustomerID, AnnualIncome, SpendingScore FROM customers",
+            db.engine
+        )
 
-            scaler = StandardScaler()
-            scaled_features = scaler.fit_transform(df[['AnnualIncome', 'SpendingScore']])
-            
-            df_scaled = pd.DataFrame(scaled_features, columns=['AnnualIncome_Scaled', 'SpendingScore_Scaled'])
-            df_scaled['CustomerID'] = df['CustomerID']
-            
-            db.session.execute(text('DELETE FROM preprocessing_data'))
-            db.session.commit()
-            
-            df_scaled.to_sql('preprocessing_data', con=db.engine, if_exists='append', index=False)
-            
-            flash('Data successfully normalized!', 'success')
-            return redirect(url_for('process_kmeans'))
-            
-        except Exception as e:
-            flash(f'Preprocessing failed: {e}', 'danger')
+        # === MIN-MAX NORMALIZATION (SESUAI EXCEL) ===
+        scaler = MinMaxScaler()
+        scaled = scaler.fit_transform(df[['AnnualIncome', 'SpendingScore']])
 
-    return render_template('preprocessing.html', tables=[raw_data.to_html(classes='min-w-full divide-y divide-gray-200', index=False)], titles=raw_data.columns.values)
+        df_scaled = pd.DataFrame(
+            scaled,
+            columns=['AnnualIncome_Scaled', 'SpendingScore_Scaled']
+        )
+        df_scaled['CustomerID'] = df['CustomerID']
 
+        db.session.execute(text('DELETE FROM preprocessing_data'))
+        db.session.commit()
+        df_scaled.to_sql('preprocessing_data', db.engine, if_exists='append', index=False)
+
+        norm = pd.read_sql("SELECT * FROM preprocessing_data LIMIT 10", db.engine)
+
+        return render_template(
+            'preprocessing.html',
+            tables=[raw.to_html(index=False)],
+            normalized_table=[norm.to_html(index=False)],
+            show_next_step=True
+        )
+
+    return render_template(
+        'preprocessing.html',
+        tables=[raw.to_html(index=False)]
+    )
+
+# ---------- K-MEANS ----------
 @app.route('/process_kmeans', methods=['GET', 'POST'])
 @login_required
 def process_kmeans():
     if request.method == 'POST':
-        try:
-            k = int(request.form['k_value'])
-            
-            df = pd.read_sql("SELECT * FROM preprocessing_data", db.engine)
-            if df.empty:
-                flash('Please do preprocessing first.', 'warning')
-                return redirect(url_for('preprocessing'))
-            
-            X = df[['AnnualIncome_Scaled', 'SpendingScore_Scaled']].values
-            
-            kmeans = KMeans(n_clusters=k, random_state=42)
-            labels = kmeans.fit_predict(X)
-            
-            df_labels = pd.DataFrame({
-                'CustomerID': df['CustomerID'],
-                'Cluster': labels
-            })
-            
-            db.session.execute(text('DELETE FROM clustering_results'))
-            db.session.commit()
-            
-            df_labels.to_sql('clustering_results', con=db.engine, if_exists='append', index=False)
-            
-            flash(f'Clustering complete with K={k}!', 'success')
-            return redirect(url_for('results'))
-            
-        except Exception as e:
-            flash(f'Clustering failed: {e}', 'danger')
-            
+        k = int(request.form['k_value'])
+
+        df = pd.read_sql("SELECT * FROM preprocessing_data", db.engine)
+        X = df[['AnnualIncome_Scaled', 'SpendingScore_Scaled']].values
+
+        # === K-MEANS FIXED RANDOM STATE ===
+        kmeans = KMeans(n_clusters=k, random_state=42)
+        labels = kmeans.fit_predict(X)
+
+        result = pd.DataFrame({
+            'CustomerID': df['CustomerID'],
+            'Cluster': labels
+        })
+
+        db.session.execute(text('DELETE FROM clustering_results'))
+        db.session.commit()
+        result.to_sql('clustering_results', db.engine, if_exists='append', index=False)
+
+        flash('Clustering berhasil', 'success')
+        return redirect(url_for('results'))
+
     return render_template('kmeans.html')
 
+# ---------- RESULTS ----------
 @app.route('/results')
 @login_required
 def results():
-    try:
-        # Join customers and results
-        query = """
-        SELECT c.*, r.Cluster 
-        FROM customers c 
-        JOIN clustering_results r ON c.CustomerID = r.CustomerID
-        ORDER BY r.Cluster, c.CustomerID
-        """
-        df = pd.read_sql(query, db.engine)
-        
-        if df.empty:
-            flash('No results found. Run clustering first.', 'warning')
-            return redirect(url_for('process_kmeans'))
+    query = """
+    SELECT c.*, r.Cluster
+    FROM customers c
+    JOIN clustering_results r ON c.CustomerID = r.CustomerID
+    """
+    df = pd.read_sql(query, db.engine)
 
-        # Generate Plot
-        plt.figure(figsize=(10, 6))
-        
-        # Colors for clusters
-        colors = ['red', 'blue', 'green', 'purple', 'orange', 'cyan', 'magenta', 'yellow', 'black', 'gray']
-        
-        for cluster in sorted(df['Cluster'].unique()):
-            cluster_data = df[df['Cluster'] == cluster]
-            plt.scatter(
-                cluster_data['AnnualIncome'], 
-                cluster_data['SpendingScore'],
-                s=50, 
-                c=colors[cluster % len(colors)],
-                label=f'Cluster {cluster}'
-            )
-            
-        plt.title('Customer Segments')
-        plt.xlabel('Annual Income (k$)')
-        plt.ylabel('Spending Score (1-100)')
-        plt.legend()
-        plt.grid(True)
-        
-        # Save to BytesIO
-        img = io.BytesIO()
-        plt.savefig(img, format='png')
-        img.seek(0)
-        plot_url = base64.b64encode(img.getvalue()).decode()
-        plt.close()
-        
-        # Cluster Summary
-        summary = df.groupby('Cluster').agg({
-            'CustomerID': 'count',
-            'AnnualIncome': 'mean',
-            'SpendingScore': 'mean'
-        }).rename(columns={'CustomerID': 'Count', 'AnnualIncome': 'AvgIncome', 'SpendingScore': 'AvgScore'})
-        
-        return render_template(
-            'result.html', 
-            plot_url=plot_url, 
-            summary=summary.to_dict(orient='index'),
-            df_head=df.head(20).to_dict(orient='records')
-        )
+    # Plot
+    plt.figure(figsize=(8, 5))
+    for c in sorted(df.Cluster.unique()):
+        d = df[df.Cluster == c]
+        plt.scatter(d.AnnualIncome, d.SpendingScore, label=f'Cluster {c}')
+    plt.legend()
+    plt.xlabel('Annual Income')
+    plt.ylabel('Spending Score')
+    plt.grid()
 
-    except Exception as e:
-        flash(f'Error loading results: {e}', 'danger')
-        return redirect(url_for('dashboard'))
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    plot_url = base64.b64encode(img.read()).decode()
+    plt.close()
 
+    summary = df.groupby('Cluster').agg(
+        Count=('CustomerID', 'count'),
+        AvgIncome=('AnnualIncome', 'mean'),
+        AvgScore=('SpendingScore', 'mean')
+    )
+
+    return render_template(
+        'result.html',
+        plot_url=plot_url,
+        summary=summary.to_dict('index'),
+        df_head=df.head(20).to_dict('records')
+    )
+
+# ---------- RECOMMENDATION ----------
 @app.route('/recommendations')
 @login_required
 def recommendations():
-    try:
-        query = """
-        SELECT c.*, r.Cluster 
-        FROM customers c 
-        JOIN clustering_results r ON c.CustomerID = r.CustomerID
-        """
-        df = pd.read_sql(query, db.engine)
-        
-        if df.empty:
-            flash('No data for recommendations.', 'warning')
-            return redirect(url_for('dashboard'))
-            
-        # Analysis per cluster to generate dynamic text
-        cluster_stats = df.groupby('Cluster').agg({
-            'AnnualIncome': 'mean',
-            'SpendingScore': 'mean'
-        }).reset_index()
-        
-        recommendations = []
-        for index, row in cluster_stats.iterrows():
-            cluster = int(row['Cluster'])
-            income = row['AnnualIncome']
-            score = row['SpendingScore']
-            
-            strategy = ""
-            bg_class = ""
-            
-            if income > 70 and score > 70:
-                name = "Target (High Income, High Spend)"
-                strategy = "Pelanggan VIP. Tawarkan produk premium, program loyalitas eksklusif, dan layanan prioritas."
-                bg_class = "bg-green-100 border-green-400 text-green-700"
-            elif income > 70 and score < 40:
-                name = "Hemat (High Income, Low Spend)"
-                strategy = "Pelanggan potensial tapi hemat. Tawarkan promosi bundle, diskon spesial untuk produk mahal, atau branding yang menekankan value."
-                bg_class = "bg-yellow-100 border-yellow-400 text-yellow-700"
-            elif income < 40 and score > 70:
-                name = "Boros (Low Income, High Spend)"
-                strategy = "Pelanggan impulsif. Hati-hati dengan risiko kredit (jika ada). Tawarkan diskon, flash sale, dan produk trendi dengan harga terjangkau."
-                bg_class = "bg-red-100 border-red-400 text-red-700"
-            elif income < 40 and score < 40:
-                name = "Sensitif (Low Income, Low Spend)"
-                strategy = "Pelanggan sensitif harga. Tawarkan kupon diskon, produk murah meriah, dan promosi beli 1 gratis 1."
-                bg_class = "bg-gray-100 border-gray-400 text-gray-700"
-            else:
-                name = "Standar (Middle Income, Middle Spend)"
-                strategy = "Pelanggan rata-rata. Fokus pada retensi pelanggan, newsletter, dan promosi musiman standar."
-                bg_class = "bg-blue-100 border-blue-400 text-blue-700"
-                
-            recommendations.append({
-                'cluster': cluster,
-                'avg_income': round(income, 2),
-                'avg_score': round(score, 2),
-                'name': name,
-                'strategy': strategy,
-                'bg_class': bg_class
-            })
-            
-        return render_template('recommendation.html', recommendations=recommendations)
+    query = """
+    SELECT c.*, r.Cluster
+    FROM customers c
+    JOIN clustering_results r ON c.CustomerID = r.CustomerID
+    """
+    df = pd.read_sql(query, db.engine)
 
-    except Exception as e:
-        flash(f'Error generating recommendations: {e}', 'danger')
-        return redirect(url_for('results'))
+    stats = df.groupby('Cluster').agg(
+        avg_income=('AnnualIncome', 'mean'),
+        avg_score=('SpendingScore', 'mean')
+    ).reset_index()
+
+    recs = []
+    for _, r in stats.iterrows():
+        recs.append({
+            'cluster': int(r.Cluster),
+            'avg_income': round(r.avg_income, 2),
+            'avg_score': round(r.avg_score, 2),
+            'name': 'Segment Pelanggan',
+            'strategy': 'Strategi pemasaran disesuaikan dengan karakteristik cluster',
+            'bg_class': 'bg-blue-100 border-blue-400 text-blue-700'
+        })
+
+    return render_template('recommendation.html', recommendations=recs)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True)
