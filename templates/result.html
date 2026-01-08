@@ -3,6 +3,29 @@
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-8">
 
+    <!-- Evaluation Section -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Evaluasi Clustering</h3>
+        <dl class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div class="px-4 py-5 bg-gray-50 shadow rounded-lg overflow-hidden sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">
+                    Silhouette Coefficient
+                </dt>
+                <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                    {{ silhouette or '-' }}
+                </dd>
+            </div>
+            <div class="px-4 py-5 bg-gray-50 shadow rounded-lg overflow-hidden sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">
+                    Davies-Bouldin Index (DBI)
+                </dt>
+                <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                    {{ dbi or '-' }}
+                </dd>
+            </div>
+        </dl>
+    </div>
+
     <!-- Chart Section -->
     <div class="bg-white shadow rounded-lg p-6">
         <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Visualisasi Cluster</h3>

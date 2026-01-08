@@ -15,6 +15,7 @@ import base64
 # === PERUBAHAN UTAMA ===
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, davies_bouldin_score
 from sqlalchemy import text
 
 app = Flask(__name__)
@@ -172,8 +173,11 @@ def process_kmeans():
         db.session.commit()
         result.to_sql('clustering_results', db.engine, if_exists='append', index=False)
 
+        silhouette_avg = silhouette_score(X, labels)
+        dbi_score = davies_bouldin_score(X, labels)
+
         flash('Clustering berhasil', 'success')
-        return redirect(url_for('results'))
+        return redirect(url_for('results', silhouette=round(silhouette_avg, 3), dbi=round(dbi_score, 3)))
 
     return render_template('kmeans.html')
 
@@ -214,7 +218,9 @@ def results():
         'result.html',
         plot_url=plot_url,
         summary=summary.to_dict('index'),
-        df_head=df.head(20).to_dict('records')
+        df_head=df.head(20).to_dict('records'),
+        silhouette=request.args.get('silhouette'),
+        dbi=request.args.get('dbi')
     )
 
 # ---------- RECOMMENDATION ----------
