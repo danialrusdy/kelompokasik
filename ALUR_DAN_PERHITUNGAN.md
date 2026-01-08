@@ -1,6 +1,6 @@
 # Penjelasan Alur Sistem & Perhitungan Metodologi
 
-Dokumen ini menjelaskan bagaimana alur kerja aplikasi web K-Means Clustering ini berjalan dan detail perhitungan matematis yang digunakan di "bawah layar" (backend).
+Dokumen ini menjelaskan bagaimana alur kerja aplikasi web K-Means Clustering ini berjalan, detail perhitungan matematis, **dan implementasi kodenya** di `app.py`.
 
 ## 1. Alur Kerja Aplikasi (Workflow)
 
@@ -8,72 +8,98 @@ Aplikasi ini dirancang dengan tahapan sekuensial (berurutan) untuk memastikan da
 
 ### Tahap 1: Upload Data (`/upload`)
 - **Input**: Pengguna mengunggah file CSV.
-- **Validasi**: Sistem mengecek apakah kolom-kolom wajib ada:
-  - `CustomerID`
-  - `Gender`
-  - `Age`
-  - `Annual Income (k$)`
-  - `Spending Score (1-100)`
-- **Aksi Database**: Saat file baru diupload, sistem **menghapus bersih (Truncate)** semua data lama di database untuk mencegah percampuran data. Data baru disimpan ke tabel `customers`.
+- **Validasi**: Sistem mengecek kolom wajib.
+- **Kode Implementasi**:
+```python
+# app.py baris 88-106
+df = pd.read_csv(path)
+required = ['CustomerID', 'Gender', 'Age', 'Annual Income (k$)', 'Spending Score (1-100)']
+# ... validasi ...
+df.to_sql('customers', db.engine, if_exists='append', index=False)
+```
 
 ### Tahap 2: Preprocessing (`/preprocessing`)
 Sebelum masuk ke algoritma, data harus disiapkan agar hasil akurat.
-- **Seleksi Fitur**: Algoritma hanya mengambil dua kolom fokus untuk clustering saat ini:
-  1. `Annual Income`
-  2. `Spending Score`
-- **Normalisasi**: Data dinormalisasi menggunakan teknik **Min-Max Scalling** (penjelasan rumus di bawah).
-- **Output**: Data yang sudah dinormalisasi (rentang 0-1) disimpan ke tabel `preprocessing_data`.
 
-### Tahap 3: Proses K-Means (`/process_kmeans`)
-- **Input User**: Pengguna menentukan jumlah cluster ($K$) yang diinginkan (misal: 3 cluster).
-- **Proses AI**: Library `scikit-learn` menjalankan algoritma K-Means pada data yang sudah dinormalisasi.
-- **Evaluasi Otomatis**: Setelah cluster terbentuk, sistem langsung menghitung kualitas cluster menggunakan **Silhouette Score** dan **Davies-Bouldin Index**.
+#### Normalisasi (Min-Max Scaling)
+Kita menggunakan **Min-Max Scaler**. Tujuannya mengubah data ke rentang 0 sampai 1.
 
-### Tahap 4: Hasil & Visualisasi (`/results`)
-Menampilkan report lengkap:
-1. **Scatter Plot**: Grafik visual penyebaran data dan pembagian warna cluster.
-2. **Kartu Evaluasi**: Menampilkan skor Silhouette dan DBI untuk menilai bagus/tidaknya hasil cluster.
-3. **Tabel Ringkasan**: Menampilkan rata-rata (Mean) Income dan Spending Score asli (bukan yang dinormalisasi) untuk setiap cluster agar mudah dibaca manusia.
-
----
-
-## 2. Detail Perhitungan (Metodologi)
-
-Berikut adalah rumus dan logika matematika yang berjalan di backend (`app.py`).
-
-### A. Normalisasi (Min-Max XML)
-Kita menggunakan **Min-Max Scaler**. Tujuannya mengubah data ke rentang 0 sampai 1 agar variabel dengan angka besar (Income ribuan) tidak mendominasi variabel angka kecil (Score puluhan).
-
-**Rumus:**
+**Rumus Matematika:**
 $$X_{new} = \frac{X - X_{min}}{X_{max} - X_{min}}$$
 
-Dimana:
-- $X$: Nilai asli data.
-- $X_{min}$: Nilai terendah di kolom tersebut.
-- $X_{max}$: Nilai tertinggi di kolom tersebut.
+**Implementasi Kode (`app.py`):**
+```python
+# Import library
+from sklearn.preprocessing import MinMaxScaler
 
-### B. Algoritma K-Means
-1. **Inisialisasi**: Pilih $K$ titik pusat (centroid) secara acak (kami set `random_state=42` agar hasil konsisten/tidak berubah-ubah setiap kali run).
-2. **Assignment**: Hitung jarak setiap data customer ke semua centroid (menggunakan **Euclidean Distance**). Masukkan customer ke centroid terdekat.
-   $$d(p, q) = \sqrt{(p_1 - q_1)^2 + (p_2 - q_2)^2}$$
-3. **Update Centroid**: Hitung ulang posisi centroid dengan mengambil rata-rata lokasi semua titik yang ada di cluster tersebut.
-4. **Iterasi**: Ulangi langkah 2 & 3 sampai posisi centroid tidak berubah lagi (konvergen).
+# Ambil data yang akan dinormalisasi
+df = pd.read_sql("SELECT CustomerID, AnnualIncome, SpendingScore FROM customers", db.engine)
 
-### C. Evaluasi Clustering
+# Inisialisasi Scaler
+scaler = MinMaxScaler()
 
-#### 1. Silhouette Coefficient
-Mengukur seberapa mirip sebuah objek dengan clusternya sendiri dibandingkan dengan cluster lain.
-- **Rentang Nilai**: -1 hingga 1.
-- **Cara Baca**:
-  - Mendekati **+1**: Clustering sangat bagus (terpisah jauh antar cluster).
-  - Mendekati **0**: Overlapping (cluster tumpang tindih).
-  - Mendekati **-1**: Salah penempatan cluster.
+# Proses hitung Min-Max (Fit & Transform sekaligus)
+scaled = scaler.fit_transform(df[['AnnualIncome', 'SpendingScore']])
 
-#### 2. Davies-Bouldin Index (DBI)
-Mengukur rasio "sebaran data di dalam cluster" dibandingkan dengan "jarak antar cluster".
-- **Cara Baca**: Semakin **KECIL** nilainya (mendekati 0), semakin **BAGUS**. Ini berarti clusternya padat (anggota mirip-mirip) dan terpisah jauh dari cluster lain.
+# Simpan hasil ke DataFrame baru
+df_scaled = pd.DataFrame(scaled, columns=['AnnualIncome_Scaled', 'SpendingScore_Scaled'])
+```
+
+### Tahap 3: Proses K-Means (`/process_kmeans`)
+Proses utama pengelompokan data.
+
+#### Algoritma K-Means
+1. **Inisialisasi**: Pilih $K$ titik pusat (centroid).
+2. **Assignment**: Hitung jarak (Euclidean Distance).
+3. **Update**: Cari posisi centroid baru.
+
+**Implementasi Kode (`app.py`):**
+```python
+# Import library
+from sklearn.cluster import KMeans
+
+# Ambil data hasil normalisasi dari database
+df = pd.read_sql("SELECT * FROM preprocessing_data", db.engine)
+X = df[['AnnualIncome_Scaled', 'SpendingScore_Scaled']].values
+
+# Jalankan K-Means
+# n_clusters=k : Jumlah cluster pilihan user
+# random_state=42 : Agar hasil konsisten (tidak berubah-ubah)
+kmeans = KMeans(n_clusters=k, random_state=42)
+
+# Lakukan training dan prediksi label sekaligus
+labels = kmeans.fit_predict(X)
+```
+
+### Tahap 4: Evaluasi & Hasil (`/results`)
+Setelah cluster terbentuk, kita hitung kualitasnya.
+
+#### 1. Silhouette Coefficient & DBI
+- **Silhouette**: Mengukur kemiripan dengan cluster sendiri vs cluster lain. (Mendekati 1 = Bagus).
+- **DBI (Davies-Bouldin)**: Mengukur rasio sebaran data. (Mendekati 0 = Bagus).
+
+**Implementasi Kode (`app.py`):**
+```python
+# Import metrics
+from sklearn.metrics import silhouette_score, davies_bouldin_score
+
+# --- Dihitung SETELAH proses clustering ---
+
+# Hitung Silhouette Score
+# Parameter: Data (X) dan Label hasil cluster (labels)
+silhouette_avg = silhouette_score(X, labels)
+
+# Hitung Davies-Bouldin Index
+dbi_score = davies_bouldin_score(X, labels)
+
+# Kirim hasil ke halaman results
+return redirect(url_for('results', silhouette=round(silhouette_avg, 3), dbi=round(dbi_score, 3)))
+```
 
 ---
 
-## Kesimpulan Flow Data
-`CSV Mentah` -> `DB (customers)` -> **MinMax Scaling** -> `DB (preprocessing_data)` -> **K-Means Calc** -> `DB (clustering_results)` -> **Evaluasi Metrics** -> `Visualisasi UI`
+## Kesimpulan Flow Data & Kode
+1. **Upload**: `pd.read_csv` -> Simpan ke DB.
+2. **Preprocessing**: `MinMaxScaler().fit_transform()` -> Ubah skala 0-1.
+3. **Clustering**: `KMeans(n_clusters=k).fit_predict()` -> Kelompokkan data.
+4. **Evaluasi**: `silhouette_score()` & `davies_bouldin_score()` -> Nilai kualitas.
